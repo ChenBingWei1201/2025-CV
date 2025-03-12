@@ -45,7 +45,7 @@ class Difference_of_Gaussian(object):
                 sub = cv2.subtract(octave_images[j+1], octave_images[j])
                 dog_sub.append(sub)
                 cv2.imwrite(f"output/DoG{i+1}-{j+1}.png", sub)
-
+            
             dog_images.append(dog_sub)
 
         # Step 3: Thresholding the value and Find local extremum (local maximun and local minimum)
@@ -64,9 +64,9 @@ class Difference_of_Gaussian(object):
                         
                         # Extract 3x3x3 neighborhood
                         neighbors = np.concatenate([
-                            octave_dog[j - 1][y-1:y+2, x-1:x+2].flatten(),  # Below
-                            octave_dog[j][y-1:y+2, x-1:x+2].flatten(),      # Same
-                            octave_dog[j + 1][y-1:y+2, x-1:x+2].flatten()   # Above
+                            np.array(octave_dog[j - 1][y-1:y+2, x-1:x+2]).flatten(),  # Below
+                            np.array(octave_dog[j][y-1:y+2, x-1:x+2]).flatten(),      # Same
+                            np.array(octave_dog[j + 1][y-1:y+2, x-1:x+2]).flatten()   # Above
                         ])
                         
                         if value >= np.max(neighbors) or value <= np.min(neighbors):
