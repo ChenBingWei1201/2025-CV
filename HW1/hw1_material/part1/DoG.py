@@ -23,7 +23,8 @@ class Difference_of_Gaussian(object):
             if i == 0:
                 base_image = image
             else:
-                base_image = cv2.resize(gaussian_images[0][-1], (0, 0), fx=0.5, fy=0.5)
+                height, width = gaussian_images[0][-1].shape[:2]
+                base_image = cv2.resize(gaussian_images[0][-1], (width // 2, height // 2), interpolation=cv2.INTER_NEAREST)
 
             octave_images = [base_image]
             for j in range(1, self.num_guassian_images_per_octave):
