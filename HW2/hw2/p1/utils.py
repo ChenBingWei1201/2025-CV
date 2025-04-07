@@ -50,27 +50,39 @@ def get_tiny_images(img_paths: str):
 
     tiny_img_feats = []
     
-    # Define the target size for tiny images (16x16)
-    target_size = (16, 16)
+    # Define the target size for tiny images (8x8 works better than 16x16 for scene recognition)
+    target_size = (8, 8)
     
     for img_path in img_paths:
         # Load the image
         img = Image.open(img_path)
         
-        # Convert to grayscale if it's not already
-        if img.mode != 'L':
-            img = img.convert('L')
+        # First crop the center square portion to maintain aspect ratio
+        width, height = img.size
+        min_dim = min(width, height)
+        left = (width - min_dim) // 2
+        top = (height - min_dim) // 2
+        right = left + min_dim
+        bottom = top + min_dim
         
-        # Resize to 16x16 (ignoring aspect ratio)
-        img_resized = img.resize(target_size, Image.BILINEAR)
+        # Crop center square and convert to grayscale
+        img = img.crop((left, top, right, bottom)).convert('L')
+        
+        # Resize to target_size
+        resized_img = img.resize(target_size, Image.BILINEAR)
         
         # Convert to numpy array and flatten
-        img_array = np.array(img_resized).flatten()
+        img_array = np.array(resized_img).flatten()
         
-        # Normalize the image
-        img_array = (img_array - np.mean(img_array)) / (np.std(img_array) + 1e-10)
+        # Normalize the image (zero mean and unit length)
+        img_mean = np.mean(img_array)
+        img_array = img_array - img_mean
         
-        # Add to the list of features
+        # L2 normalization (unit length)
+        img_norm = np.linalg.norm(img_array)
+        if img_norm > 0:
+            img_array = img_array / img_norm
+        
         tiny_img_feats.append(img_array)
     
     # Convert to numpy array
@@ -138,10 +150,8 @@ def build_vocabulary(
     # List to collect all SIFT features
     all_features = []
     
-    # For maximum efficiency, use a very small subset of images 
-    # (~5% of training data) which is still sufficient to create a decent vocabulary
-    sampled_indices = np.linspace(0, len(img_paths)-1, 75, dtype=int)
-    sampled_img_paths = [img_paths[i] for i in sampled_indices]
+    # Sample a subset of training images (every 5th image)
+    sampled_img_paths = img_paths[::5]
     
     # Process each image
     for img_path in tqdm(sampled_img_paths, desc="Extracting SIFT features"):
@@ -149,17 +159,16 @@ def build_vocabulary(
         img = Image.open(img_path).convert('L')
         img_array = np.array(img).astype('float32')
         
-        # Extract SIFT features with much larger step size for speed
-        # Using step=[12, 12] for significant speed increase
-        _, descriptors = dsift(img_array, step=[12, 12], fast=True)
+        # Extract SIFT features with larger step size for speed
+        _, descriptors = dsift(img_array, step=[5, 5], fast=True)
         
         # If no features were found, skip this image
         if descriptors.shape[0] == 0:
             continue
             
-        # Sample at most 25 descriptors per image for efficiency
-        if descriptors.shape[0] > 25:
-            indices = np.random.choice(descriptors.shape[0], 25, replace=False)
+        # Sample a subset of descriptors to save memory
+        if descriptors.shape[0] > 100:
+            indices = np.random.choice(descriptors.shape[0], 100, replace=False)
             descriptors = descriptors[indices]
         
         # Add to the collection
@@ -171,8 +180,8 @@ def build_vocabulary(
     # Ensure features are float32 (required by kmeans function)
     all_features = all_features.astype(np.float32)
     
-    # Cap the number of features to use for clustering
-    max_features_for_clustering = 2000  # Reduced for speed
+    # Cap the number of features for clustering
+    max_features_for_clustering = 10000
     if all_features.shape[0] > max_features_for_clustering:
         indices = np.random.choice(all_features.shape[0], max_features_for_clustering, replace=False)
         all_features = all_features[indices]
@@ -235,31 +244,38 @@ def get_bags_of_sifts(
         img = Image.open(img_path).convert('L')
         img_array = np.array(img).astype('float32')
         
-        # Extract SIFT features with much larger step size for faster processing
-        _, descriptors = dsift(img_array, step=[8, 8], fast=True)
+        # Extract SIFT features
+        _, descriptors = dsift(img_array, step=[5, 5], fast=True)
         
-        # If no descriptors were found, create a zero histogram
-        if descriptors.shape[0] == 0 or len(descriptors) == 0:
-            hist = np.zeros(vocab_size)
+        # If no features were found, create a uniform histogram
+        if descriptors.shape[0] == 0:
+            hist = np.ones(vocab_size) / vocab_size
             img_feats.append(hist)
             continue
-        
-        # Calculate distances between descriptors and vocabulary words
+            
+        # Calculate distances between descriptors and vocabulary
         distances = cdist(descriptors, vocab)
         
-        # Assign each descriptor to the nearest cluster center
-        cluster_assignments = np.argmin(distances, axis=1)
+        # Assign each descriptor to the nearest vocabulary word
+        assignments = np.argmin(distances, axis=1)
         
         # Build histogram
         hist = np.zeros(vocab_size)
-        for idx in cluster_assignments:
+        for idx in assignments:
             hist[idx] += 1
-        
-        # Normalize the histogram
+            
+        # Normalize histogram
         if np.sum(hist) > 0:
             hist = hist / np.sum(hist)
+            
+        # Apply Hellinger kernel (take square root)
+        hist = np.sqrt(hist)
         
-        # Add to the collection
+        # L2 normalize the histogram
+        norm = np.linalg.norm(hist)
+        if norm > 0:
+            hist = hist / norm
+            
         img_feats.append(hist)
     
     # Convert to numpy array
@@ -322,42 +338,39 @@ def nearest_neighbor_classify(
 
     test_predicts = []
     
-    # Use k=3 for a balance between accuracy and speed
-    k = 3
+    # Check if we're dealing with tiny images or bag of SIFT features
+    is_bow = (train_img_feats.shape[1] > 100)
     
-    # Choose appropriate distance metric based on feature type
-    if train_img_feats.shape[1] > 100:  # If using bag-of-sift
-        # For histogram features (bag-of-words), chi-squared distance often works well
-        # But it's computationally intensive, so for faster runtime we'll use cosine distance
-        distance_metric = 'cosine'
+    if is_bow:
+        # For bag of SIFT features, use Euclidean distance
+        distances = cdist(test_img_feats, train_img_feats, metric='euclidean')
+        
+        # Choose k=15 for bag of SIFT (original parameter that achieved 0.6 accuracy)
+        k = 15
     else:
-        # For tiny images, Manhattan distance (p=1)
-        distance_metric = 'minkowski'
-        p_value = 1  # p=1 is Manhattan distance
+        # For tiny images, use cosine distance which works well with normalized vectors
+        distances = cdist(test_img_feats, train_img_feats, metric='cosine')
+        
+        # For tiny images, use k=7
+        k = 7
     
-    # Calculate distances between test and training features
-    if distance_metric == 'minkowski':
-        distances = cdist(test_img_feats, train_img_feats, metric=distance_metric, p=p_value)
-    else:
-        distances = cdist(test_img_feats, train_img_feats, metric=distance_metric)
-    
-    # For each test image
+    # Classify each test image
     for i in range(distances.shape[0]):
-        # Find the k nearest neighbors (indices)
+        # Find k nearest neighbors
         nearest_indices = np.argsort(distances[i])[:k]
         
-        # Get the labels of these neighbors
+        # Get the labels of nearest neighbors
         neighbor_labels = [train_labels[idx] for idx in nearest_indices]
         
-        # Vote for the most common label
+        # Count votes for each label
         label_counts = {}
         for label in neighbor_labels:
             if label not in label_counts:
                 label_counts[label] = 0
             label_counts[label] += 1
         
-        # Find the label with the highest count
-        predicted_label = max(label_counts, key=label_counts.get)
+        # Find the label with the most votes
+        predicted_label = max(label_counts.items(), key=lambda x: x[1])[0]
         test_predicts.append(predicted_label)
 
     ###########################################################################
