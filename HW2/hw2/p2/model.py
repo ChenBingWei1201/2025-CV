@@ -18,8 +18,53 @@ class MyNet(nn.Module):
         # Define your CNN model architecture. Note that the first      #
         # input channel is 3, and the output dimension is 10 (class).  #
         ################################################################
-
-        pass
+        # Conv layers
+        self.features = nn.Sequential(
+            # First convolutional block
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            # Second convolutional block
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            # Third convolutional block
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            # Fourth convolutional block
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        
+        # Classifier
+        self.classifier = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.Linear(512 * 2 * 2, 1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(1024, 10)
+        )
 
     def forward(self, x):
 
@@ -27,8 +72,10 @@ class MyNet(nn.Module):
         # TODO:                                  #
         # Define the forward path of your model. #
         ##########################################
-
-        pass
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
     
 class ResNet18(nn.Module):
     def __init__(self):
@@ -41,8 +88,8 @@ class ResNet18(nn.Module):
 
         # (batch_size, 3, 32, 32)
         # try to load the pretrained weights
-        self.resnet = models.resnet18(weights=None)  # Python3.8 w/ torch 2.2.1
-        # self.resnet = models.resnet18(pretrained=False)  # Python3.6 w/ torch 1.10.1
+        self.resnet = models.resnet18(weights="IMAGENET1K_V1")  # Python3.8 w/ torch 2.2.1
+        # self.resnet = models.resnet18(pretrained=True)  # Python3.6 w/ torch 1.10.1
         # (batch_size, 512)
         self.resnet.fc = nn.Linear(self.resnet.fc.in_features, 10)
         # (batch_size, 10)
@@ -56,6 +103,10 @@ class ResNet18(nn.Module):
         # You can run model.py for resnet18's detail structure                #
         #######################################################################
 
+        # Modify first layer to better handle smaller 32x32 images (original expects 224x224)
+        self.resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        # Remove the maxpool layer which reduces spatial dimensions
+        self.resnet.maxpool = nn.Identity()
         ############################## TODO End ###############################
 
     def forward(self, x):

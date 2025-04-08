@@ -53,8 +53,76 @@ def plot_learning_curve(
     # plot being unsaved if early stop, so the result_lists's size #
     # is not fixed.                                                #
     ################################################################
+    # Get data from result_lists
+    epochs = list(range(1, len(result_lists['train_acc']) + 1))
     
-    pass
+    # Plot training accuracy
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, result_lists['train_acc'], 'b-', label='Training Accuracy')
+    plt.title('Training Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(logfile_dir, 'train_accuracy.png'))
+    plt.close()
+    
+    # Plot training loss
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, result_lists['train_loss'], 'r-', label='Training Loss')
+    plt.title('Training Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(logfile_dir, 'train_loss.png'))
+    plt.close()
+    
+    # Plot validation accuracy
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, result_lists['val_acc'], 'g-', label='Validation Accuracy')
+    plt.title('Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(logfile_dir, 'val_accuracy.png'))
+    plt.close()
+    
+    # Plot validation loss
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, result_lists['val_loss'], 'm-', label='Validation Loss')
+    plt.title('Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(logfile_dir, 'val_loss.png'))
+    plt.close()
+    
+    # Combined plot
+    plt.figure(figsize=(12, 10))
+    
+    plt.subplot(2, 1, 1)
+    plt.plot(epochs, result_lists['train_acc'], 'b-', label='Training Accuracy')
+    plt.plot(epochs, result_lists['val_acc'], 'g-', label='Validation Accuracy')
+    plt.title('Accuracy')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.subplot(2, 1, 2)
+    plt.plot(epochs, result_lists['train_loss'], 'r-', label='Training Loss')
+    plt.plot(epochs, result_lists['val_loss'], 'm-', label='Validation Loss')
+    plt.title('Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(logfile_dir, 'combined_curves.png'))
+    plt.close()
 
 def train(
         model: nn.Module,
@@ -133,7 +201,16 @@ def train(
             # You don't have to update parameters, just record the      #
             # accuracy and loss.                                        #
             #############################################################
-
+            for batch, data in enumerate(val_loader):
+                # Data loading
+                images, labels = data['images'].to(device), data['labels'].to(device)
+                # Forward pass
+                pred = model(images)
+                # Calculate loss
+                loss = criterion(pred, labels)
+                # Evaluate
+                val_correct += torch.sum(torch.argmax(pred, dim=1) == labels)
+                val_loss += loss.item()
             ######################### TODO End ##########################
 
         # Print validation result
