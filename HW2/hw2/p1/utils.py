@@ -338,21 +338,11 @@ def nearest_neighbor_classify(
 
     test_predicts = []
     
-    # Check if we're dealing with tiny images or bag of SIFT features
-    is_bow = (train_img_feats.shape[1] > 100)
-    
-    if is_bow:
-        # For bag of SIFT features, use Euclidean distance
-        distances = cdist(test_img_feats, train_img_feats, metric='euclidean')
+    # use cosine distance which works well with normalized vectors
+    distances = cdist(test_img_feats, train_img_feats, metric='cosine')
         
-        # Choose k=15 for bag of SIFT (original parameter that achieved 0.6 accuracy)
-        k = 15
-    else:
-        # For tiny images, use cosine distance which works well with normalized vectors
-        distances = cdist(test_img_feats, train_img_feats, metric='cosine')
-        
-        # For tiny images, use k=7
-        k = 7
+    # use k=7
+    k = 7
     
     # Classify each test image
     for i in range(distances.shape[0]):
