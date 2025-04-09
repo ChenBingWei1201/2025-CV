@@ -45,7 +45,7 @@ class Difference_of_Gaussian(object):
             for j in range(self.num_DoG_images_per_octave):
                 sub = cv2.subtract(octave_images[j+1], octave_images[j])
                 dog_sub.append(sub)
-                # cv2.imwrite(f"output/DoG{i+1}-{j+1}.png", sub)
+                # cv2.imwrite(f"output/DoG{i+1}-{j+1}.png", ((sub + 255) / 2))
             
             dog_images.append(dog_sub)
 
