@@ -1,0 +1,9 @@
+Loading all data paths and labels...
+Feature: tiny_image
+Classifier: nearest_neighbor
+Accuracy = 0.22466666666666665
+
+Loading all data paths and labels...
+Feature: bag_of_sift
+Classifier: nearest_neighbor
+Accuracy = 0.6126666666666667
