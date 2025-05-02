@@ -29,12 +29,27 @@ def planarAR(REF_IMAGE_PATH, VIDEO_PATH):
         if ret:  ## check whethere the frame is legal, i.e., there still exists a frame
             # TODO: 1.find corners with aruco
             # function call to aruco.detectMarkers()
-
-            # TODO: 2.find homograpy
-            # function call to solve_homography()
-
-            # TODO: 3.apply backward warp
-            # function call to warping()
+            corners, ids, _ = aruco.detectMarkers(frame, arucoDict, parameters=arucoParameters)
+            
+            if ids is not None and len(ids) > 0:
+                # TODO: 2.find homograpy
+                # function call to solve_homography()
+                # Get the corners in correct order (assuming first marker only)
+                marker_corners = corners[0][0]  # Take the first marker's corners
+                H = solve_homography(ref_corns, marker_corners)
+                
+                # TODO: 3.apply backward warp
+                # function call to warping()
+                # Create a copy of the frame to avoid modifying the original
+                frame_copy = frame.copy()
+                
+                # Get warped reference image onto the frame
+                frame = warping(ref_image, frame_copy, H, 
+                                int(np.min(marker_corners[:, 1])), 
+                                int(np.max(marker_corners[:, 1])), 
+                                int(np.min(marker_corners[:, 0])), 
+                                int(np.max(marker_corners[:, 0])), 
+                                direction='b')
 
             videowriter.write(frame)
             pbar.update(1)
